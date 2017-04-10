@@ -8,7 +8,7 @@ object GameParameters{
   val FRAMES_IN_GAME = 10
 }
 
-class Scorecard(frameNumber: Int = 1, rollNumber: Int = 1, score: Int = 0, pinsLeft:Int = GameParameters.PINS_IN_FRAME) {
+class Scorecard(frameNumber: Int = 1, rollNumber: Int = 1, score: Int = 0, pinsLeft:Int = GameParameters.PINS_IN_FRAME, lastFrameSpare: Boolean = false) {
 
   def nextRoll:String = {
     if (frameNumber > GameParameters.FRAMES_IN_GAME) {
@@ -28,7 +28,9 @@ class Scorecard(frameNumber: Int = 1, rollNumber: Int = 1, score: Int = 0, pinsL
       } else {
         (frameNumber, rollNumber + 1, GameParameters.PINS_IN_FRAME-roll)
       }
-      Right(new Scorecard(frameRollPins._1, frameRollPins._2, roll+score, frameRollPins._3))
+      val isSpare = (rollNumber==2 && roll == pinsLeft)
+      val spareBonus = if(lastFrameSpare) {roll} else {0}
+      Right(new Scorecard(frameRollPins._1, frameRollPins._2, roll+score+spareBonus, frameRollPins._3, isSpare))
     } else {
       Left(s"Invalid roll: should be between 0 and $pinsLeft")
     }
