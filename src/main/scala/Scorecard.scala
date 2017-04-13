@@ -8,31 +8,33 @@ object GameParameters{
   val FRAMES_IN_GAME = 10
 }
 
-class Scorecard(frameNumber: Int = 1, rollNumber: Int = 1, score: Int = 0, pinsLeft:Int = GameParameters.PINS_IN_FRAME, lastFrameSpare: Boolean = false) {
+case class FrameState(frameNumber: Int = 1, rollNumber: Int = 1,pinsLeft:Int = GameParameters.PINS_IN_FRAME)
+
+class Scorecard(frameState:FrameState = FrameState(), score: Int = 0, lastFrameSpare: Boolean = false) {
 
   def nextRoll:String = {
-    if (frameNumber > GameParameters.FRAMES_IN_GAME) {
+    if (frameState.frameNumber > GameParameters.FRAMES_IN_GAME) {
       "Game Over"
     } else {
-      s"Frame $frameNumber: Roll $rollNumber"
+      s"Frame ${frameState.frameNumber}: Roll ${frameState.rollNumber}"
     }
   }
   def totalScore:Int = score
 
   def roll(roll:Int): Either[String,Scorecard] = {
-    if (frameNumber > GameParameters.FRAMES_IN_GAME){
+    if (frameState.frameNumber > GameParameters.FRAMES_IN_GAME){
       Left(s"Game Over")
-    } else  if (roll >= 0 && roll <= pinsLeft){
-      val frameRollPins = if (rollNumber > 1 || roll == pinsLeft) {
-        (frameNumber+1, 1, GameParameters.PINS_IN_FRAME)
+    } else  if (roll >= 0 && roll <= frameState.pinsLeft){
+      val frameRollPins = if (frameState.rollNumber > 1 || roll == frameState.pinsLeft) {
+        FrameState(frameState.frameNumber+1, 1, GameParameters.PINS_IN_FRAME)
       } else {
-        (frameNumber, rollNumber + 1, GameParameters.PINS_IN_FRAME-roll)
+        FrameState(frameState.frameNumber, frameState.rollNumber + 1, GameParameters.PINS_IN_FRAME-roll)
       }
-      val isSpare = (rollNumber==2 && roll == pinsLeft)
+      val isSpare = (frameState.rollNumber==2 && roll == frameState.pinsLeft)
       val spareBonus = if(lastFrameSpare) {roll} else {0}
-      Right(new Scorecard(frameRollPins._1, frameRollPins._2, roll+score+spareBonus, frameRollPins._3, isSpare))
+      Right(new Scorecard(frameRollPins, roll+score+spareBonus, isSpare))
     } else {
-      Left(s"Invalid roll: should be between 0 and $pinsLeft")
+      Left(s"Invalid roll: should be between 0 and ${frameState.pinsLeft}")
     }
 
   }
