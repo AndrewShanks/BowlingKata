@@ -18,6 +18,9 @@ case class FrameState(frameNumber: Int = 1, rollNumber: Int = 1,pinsLeft:Int = G
   }
 
   def normalFramesOver = frameNumber > GameParameters.FRAMES_IN_GAME
+  
+  def nextFrame = FrameState(frameNumber+1, 1, GameParameters.PINS_IN_FRAME)
+  def nextRoll(roll:Int) = FrameState(frameNumber, rollNumber + 1, GameParameters.PINS_IN_FRAME-roll)
 }
 
 case class BonusTracker(spareLastRoll: Boolean = false, strikeLastRoll: Boolean = false, strikeTwoRollsAgo: Boolean = false) {
@@ -58,10 +61,10 @@ class Scorecard(frameState:FrameState = FrameState(), score: Int = 0, bonusTrack
     if (frameState.normalFramesOver && !bonusTracker.isBonusOutstanding()){
       Left(s"Game Over")
     } else  if (roll >= 0 && roll <= frameState.pinsLeft){
-      val frameRollPins = if (frameState.rollNumber > 1 || roll == frameState.pinsLeft) {
-        FrameState(frameState.frameNumber+1, 1, GameParameters.PINS_IN_FRAME)
+      val nextFrameState = if (frameState.rollNumber > 1 || roll == frameState.pinsLeft) {
+        frameState.nextFrame
       } else {
-        FrameState(frameState.frameNumber, frameState.rollNumber + 1, GameParameters.PINS_IN_FRAME-roll)
+        frameState.nextRoll(roll)
       }
       val isSpare = frameState.wasASpareRolled(roll)
       val isStrike = frameState.wasAStrikeRolled(roll)
@@ -72,7 +75,7 @@ class Scorecard(frameState:FrameState = FrameState(), score: Int = 0, bonusTrack
         score + roll + bonusTracker.getBonus(roll)
       }
 
-      Right(new Scorecard(frameRollPins, newScore, bonusTracker.nextBonusTracker(isSpare, isStrike)))
+      Right(new Scorecard(nextFrameState, newScore, bonusTracker.nextBonusTracker(isSpare, isStrike)))
     } else {
       Left(s"Invalid roll: should be between 0 and ${frameState.pinsLeft}")
     }
