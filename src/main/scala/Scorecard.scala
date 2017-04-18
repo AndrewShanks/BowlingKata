@@ -45,15 +45,13 @@ case class Frame (rolls:List[Int]){
     if( n < 0 || n >= rolls.length){
       None
     } else{
-      Some(rolls{n})
+      val index = rolls.length - n - 1
+      Some(rolls{index})
     }
   }
 
   def addRoll(roll:Int):Frame = {
-    rolls match {
-      case Nil => Frame(List(roll))
-      case x::xs => Frame(List(x,roll))
-    }
+    Frame(roll::rolls)
   }
 
   def score:Int = rolls.sum
@@ -92,21 +90,20 @@ class Scorecard(frameState:FrameState = FrameState(), score: Int = 0, bonusTrack
     if (frameState.normalFramesOver && !bonusTracker.isBonusOutstanding()){
       Left(s"Game Over")
     } else  if (roll >= 0 && roll <= frameState.pinsLeft){
-      val newStateNewArray = if (frameState.rollNumber > 1 || roll == frameState.pinsLeft) {
-        val newState = frameState.nextFrame
-        val newArray = frameArray match {
-          case Nil => List(Frame(List(roll)))
-          case x::xs => x.addRoll(roll)::xs
-        }
-        (newState, newArray)
+
+      val nextFrameState = if (frameState.rollNumber > 1 || roll == frameState.pinsLeft) {
+        frameState.nextFrame
       } else {
-        val newState = frameState.nextRoll(roll)
-        val newArray = Frame(List(roll))::frameArray
-        (newState,newArray)
+        frameState.nextRoll(roll)
       }
 
-      val nextFrameState = newStateNewArray._1
-      val newFrameArray = newStateNewArray._2
+      val newFrameArray = if (frameState.rollNumber > 1){
+        frameArray match {
+          case x::xs => x.addRoll(roll)::xs
+        }
+      } else {
+        Frame(List(roll))::frameArray
+      }
 
       val isSpare = frameState.wasASpareRolled(roll)
       val isStrike = frameState.wasAStrikeRolled(roll)
