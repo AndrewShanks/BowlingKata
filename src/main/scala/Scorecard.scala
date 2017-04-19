@@ -70,6 +70,30 @@ class Scorecard(frameState:FrameState = FrameState(), score: Int = 0, bonusTrack
     }
   }
 
+  def nextRollNumber: Int = {
+    frames match {
+      case Nil => 1
+      case x::xs if isNewFrame(frames, x) => 1
+      case x::xs => x.rolls.length + 1
+    }
+  }
+
+  def nextFrameNumber: Int = {
+    frames match {
+      case Nil => 1
+      case x::xs if isNewFrame(frames, x) => frames.length +1
+      case _ => frames.length
+    }
+  }
+
+  def isNewFrame(theFrames: List[Frame], mostRecentFrame: Frame) = {
+    if(theFrames.length < GameParameters.FRAMES_IN_GAME){
+      mostRecentFrame.rolls.length > 1 || mostRecentFrame.rolls.isEmpty || mostRecentFrame.getRoll(0).get == GameParameters.PINS_IN_FRAME
+    } else {
+      !bonusTracker.isBonusOutstanding()
+    }
+  }
+
   def nextRoll:String = {
     if(frameState.normalFramesOver && (bonusTracker.isBonusOutstanding())) {
       if(bonusTracker.spareLastRoll || bonusTracker.strikeLastRoll) {
@@ -80,11 +104,12 @@ class Scorecard(frameState:FrameState = FrameState(), score: Int = 0, bonusTrack
     }else if (frameState.normalFramesOver) {
       "Game Over"
     } else {
-      s"Frame ${frameState.frameNumber}: Roll ${frameState.rollNumber}"
+      s"Frame $nextFrameNumber: Roll $nextRollNumber"
     }
   }
   def totalScore:Int = score
 
+  //pins are reset after a foul - treating a foul as a roll of 0 is fine
   def roll(roll:Int): Either[String,Scorecard] = {
 
     if (frameState.normalFramesOver && !bonusTracker.isBonusOutstanding()){
@@ -97,7 +122,7 @@ class Scorecard(frameState:FrameState = FrameState(), score: Int = 0, bonusTrack
         frameState.nextRoll(roll)
       }
 
-      val newFrameArray = if (frameState.rollNumber > 1){
+      val newFrameArray = if (frameState.rollNumber > 1 || frameState.normalFramesOver){
         frameArray match {
           case x::xs => x.addRoll(roll)::xs
         }
