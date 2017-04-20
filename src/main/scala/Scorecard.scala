@@ -38,9 +38,11 @@ case class BonusTracker(spareLastRoll: Boolean = false, strikeLastRoll: Boolean 
   def isBonusOutstanding() = {
     spareLastRoll || strikeLastRoll || strikeTwoRollsAgo
   }
+
+
 }
 
-case class Frame (rolls:List[Int]){
+case class Frame (rolls:List[Int], bonuses:List[Int] = List()){
   def getRoll(n:Int):Option[Int] = {
     if( n < 0 || n >= rolls.length){
       None
@@ -54,7 +56,19 @@ case class Frame (rolls:List[Int]){
     Frame(roll::rolls)
   }
 
-  def score:Int = rolls.sum
+  def score:Int = rolls.sum + bonuses.sum
+
+  def addBonus(bonus:Int):Frame = Frame(rolls, bonus::bonuses)
+
+  def isSpare = {
+    rolls match{
+      case x::y::xs => x != GameParameters.PINS_IN_FRAME && x+y == GameParameters.PINS_IN_FRAME
+      case _ => false
+    }
+  }
+  def isStrike = {
+    rolls.length == 1 && rolls.head == GameParameters.PINS_IN_FRAME
+  }
 }
 
 class Scorecard(frameState:FrameState = FrameState(), score: Int = 0, bonusTracker: BonusTracker = BonusTracker(), frameArray:List[Frame] = List()) {
@@ -122,12 +136,35 @@ class Scorecard(frameState:FrameState = FrameState(), score: Int = 0, bonusTrack
         frameState.nextRoll(roll)
       }
 
-      val newFrameArray = if (frameState.rollNumber > 1 || frameState.normalFramesOver){
-        frameArray match {
+      val updatedFrameArray = frameArray match {
+        case x::y::xs => {
+          val newY = if (y.isStrike && y.bonuses.length < 2) {
+            y.addBonus(roll)
+          } else {
+            y
+          }
+          val newX = if ((x.isSpare && x.bonuses.length < 1)||(x.isStrike && x.bonuses.length < 2)){
+            x.addBonus(roll)
+          } else {
+            x
+          }
+          newX::newY::xs
+        }
+        case x::xs if (x.isSpare||x.isStrike) && x.bonuses.length <1 => x.addBonus(roll)::xs
+        case _ =>{
+          println("previous frame not found")
+          frameArray
+        }
+      }
+
+      val newFrameArray = if (frameState.normalFramesOver){
+        updatedFrameArray
+      } else if (frameState.rollNumber > 1){
+        updatedFrameArray match {
           case x::xs => x.addRoll(roll)::xs
         }
       } else {
-        Frame(List(roll))::frameArray
+        Frame(List(roll))::updatedFrameArray
       }
 
       val isSpare = frameState.wasASpareRolled(roll)
