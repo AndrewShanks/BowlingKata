@@ -23,25 +23,6 @@ case class FrameState(frameNumber: Int = 1, rollNumber: Int = 1,pinsLeft:Int = G
   def nextRoll(roll:Int) = FrameState(frameNumber, rollNumber + 1, GameParameters.PINS_IN_FRAME-roll)
 }
 
-case class BonusTracker(spareLastRoll: Boolean = false, strikeLastRoll: Boolean = false, strikeTwoRollsAgo: Boolean = false) {
-  def getBonus(roll: Int) = {
-    val spareBonus = if(spareLastRoll) {roll} else {0}
-    val strikeBonusFromLastRoll = if(strikeLastRoll) {roll} else {0}
-    val strikeBonusFromTwoRollsAgo = if(strikeTwoRollsAgo) {roll} else {0}
-    spareBonus + strikeBonusFromLastRoll + strikeBonusFromTwoRollsAgo
-  }
-
-  def nextBonusTracker(isSpare:Boolean, isStrike:Boolean) = {
-    BonusTracker(isSpare, isStrike, strikeLastRoll)
-  }
-
-  def isBonusOutstanding() = {
-    spareLastRoll || strikeLastRoll || strikeTwoRollsAgo
-  }
-
-
-}
-
 case class Frame (rolls:List[Int], bonuses:List[Int] = List()){
   def getRoll(n:Int):Option[Int] = {
     if( n < 0 || n >= rolls.length){
@@ -69,9 +50,14 @@ case class Frame (rolls:List[Int], bonuses:List[Int] = List()){
   def isStrike = {
     rolls.length == 1 && rolls.head == GameParameters.PINS_IN_FRAME
   }
+
+  def bonusOutstanding = {
+    (isSpare && bonuses.length < 1) || (isStrike && bonuses.length <2)
+
+  }
 }
 
-class Scorecard(frameState:FrameState = FrameState(), bonusTracker: BonusTracker = BonusTracker(), frameArray:List[Frame] = List()) {
+class Scorecard(frameState:FrameState = FrameState(), frameArray:List[Frame] = List()) {
 
   val frames:List[Frame]  = frameArray
 
@@ -104,22 +90,22 @@ class Scorecard(frameState:FrameState = FrameState(), bonusTracker: BonusTracker
     if(theFrames.length < GameParameters.FRAMES_IN_GAME){
       mostRecentFrame.rolls.length > 1 || mostRecentFrame.rolls.isEmpty || mostRecentFrame.getRoll(0).get == GameParameters.PINS_IN_FRAME
     } else {
-      !bonusTracker.isBonusOutstanding()
+      !mostRecentFrame.bonusOutstanding
     }
   }
 
   def nextRoll:String = {
-    if(frameState.normalFramesOver && (bonusTracker.isBonusOutstanding())) {
-      if(bonusTracker.spareLastRoll || bonusTracker.strikeLastRoll) {
-        "Bonus roll 1"
-      } else {
-        "Bonus roll 2"
-      }
-    }else if (frameState.normalFramesOver) {
+    if(rollingBonusesForLastFrame) {
+      s"Bonus roll ${frames.head.bonuses.length +1}"
+    }else if (frames.length == GameParameters.FRAMES_IN_GAME) {
       "Game Over"
     } else {
       s"Frame $nextFrameNumber: Roll $nextRollNumber"
     }
+  }
+
+  def rollingBonusesForLastFrame = {
+    frames.length == GameParameters.FRAMES_IN_GAME && frames.head.bonusOutstanding
   }
 
   def totalScore:Int = frames.foldLeft(0)((total,frame) => total + frame.score)
@@ -127,7 +113,7 @@ class Scorecard(frameState:FrameState = FrameState(), bonusTracker: BonusTracker
   //pins are reset after a foul - treating a foul as a roll of 0 is fine
   def roll(roll:Int): Either[String,Scorecard] = {
 
-    if (frameState.normalFramesOver && !bonusTracker.isBonusOutstanding()){
+    if (frameState.normalFramesOver && !frames.head.bonusOutstanding){
       Left(s"Game Over")
     } else  if (roll >= 0 && roll <= frameState.pinsLeft){
 
@@ -167,10 +153,7 @@ class Scorecard(frameState:FrameState = FrameState(), bonusTracker: BonusTracker
         Frame(List(roll))::updatedFrameArray
       }
 
-      val isSpare = frameState.wasASpareRolled(roll)
-      val isStrike = frameState.wasAStrikeRolled(roll)
-
-      Right(new Scorecard(nextFrameState, bonusTracker.nextBonusTracker(isSpare, isStrike), newFrameArray))
+      Right(new Scorecard(nextFrameState, newFrameArray))
     } else {
       Left(s"Invalid roll: should be between 0 and ${frameState.pinsLeft}")
     }
