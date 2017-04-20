@@ -71,7 +71,7 @@ case class Frame (rolls:List[Int], bonuses:List[Int] = List()){
   }
 }
 
-class Scorecard(frameState:FrameState = FrameState(), score: Int = 0, bonusTracker: BonusTracker = BonusTracker(), frameArray:List[Frame] = List()) {
+class Scorecard(frameState:FrameState = FrameState(), bonusTracker: BonusTracker = BonusTracker(), frameArray:List[Frame] = List()) {
 
   val frames:List[Frame]  = frameArray
 
@@ -121,7 +121,8 @@ class Scorecard(frameState:FrameState = FrameState(), score: Int = 0, bonusTrack
       s"Frame $nextFrameNumber: Roll $nextRollNumber"
     }
   }
-  def totalScore:Int = score
+
+  def totalScore:Int = frames.foldLeft(0)((total,frame) => total + frame.score)
 
   //pins are reset after a foul - treating a foul as a roll of 0 is fine
   def roll(roll:Int): Either[String,Scorecard] = {
@@ -152,7 +153,6 @@ class Scorecard(frameState:FrameState = FrameState(), score: Int = 0, bonusTrack
         }
         case x::xs if (x.isSpare||x.isStrike) && x.bonuses.length <1 => x.addBonus(roll)::xs
         case _ =>{
-          println("previous frame not found")
           frameArray
         }
       }
@@ -170,13 +170,7 @@ class Scorecard(frameState:FrameState = FrameState(), score: Int = 0, bonusTrack
       val isSpare = frameState.wasASpareRolled(roll)
       val isStrike = frameState.wasAStrikeRolled(roll)
 
-      val newScore = if(frameState.normalFramesOver){
-        score + bonusTracker.getBonus(roll)
-      } else {
-        score + roll + bonusTracker.getBonus(roll)
-      }
-
-      Right(new Scorecard(nextFrameState, newScore, bonusTracker.nextBonusTracker(isSpare, isStrike), newFrameArray))
+      Right(new Scorecard(nextFrameState, bonusTracker.nextBonusTracker(isSpare, isStrike), newFrameArray))
     } else {
       Left(s"Invalid roll: should be between 0 and ${frameState.pinsLeft}")
     }
