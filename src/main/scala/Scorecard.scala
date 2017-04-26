@@ -8,19 +8,9 @@ object GameParameters{
   val FRAMES_IN_GAME = 10
 }
 
-case class FrameState(frameNumber: Int = 1, rollNumber: Int = 1,pinsLeft:Int = GameParameters.PINS_IN_FRAME) {
-  def wasASpareRolled(roll:Int) = {
-   rollNumber == 2 && roll == pinsLeft && !normalFramesOver
-  }
-
-  def wasAStrikeRolled(roll:Int) = {
-    rollNumber==1 && roll == GameParameters.PINS_IN_FRAME && !normalFramesOver
-  }
-
-  def normalFramesOver = frameNumber > GameParameters.FRAMES_IN_GAME
-  
-  def nextFrame = FrameState(frameNumber+1, 1, GameParameters.PINS_IN_FRAME)
-  def nextRoll(roll:Int) = FrameState(frameNumber, rollNumber + 1, GameParameters.PINS_IN_FRAME-roll)
+case class FrameState(pinsLeft:Int = GameParameters.PINS_IN_FRAME) {
+  def nextFrame = FrameState(GameParameters.PINS_IN_FRAME)
+  def nextRoll(roll:Int) = FrameState(GameParameters.PINS_IN_FRAME-roll)
 }
 
 case class Frame (rolls:List[Int], bonuses:List[Int] = List()){
@@ -87,17 +77,15 @@ class Scorecard(frameState:FrameState = FrameState(), frameArray:List[Frame] = L
   }
 
   def isNewFrame(theFrames: List[Frame], mostRecentFrame: Frame) = {
-    if(theFrames.length < GameParameters.FRAMES_IN_GAME){
-      mostRecentFrame.rolls.length > 1 || mostRecentFrame.rolls.isEmpty || mostRecentFrame.getRoll(0).get == GameParameters.PINS_IN_FRAME
-    } else {
-      !mostRecentFrame.bonusOutstanding
-    }
+    (mostRecentFrame.rolls.length > 1 || mostRecentFrame.rolls.isEmpty || mostRecentFrame.getRoll(0).get == GameParameters.PINS_IN_FRAME) &&
+      !rollingBonusesForLastFrame
   }
 
   def nextRoll:String = {
     if(rollingBonusesForLastFrame) {
       s"Bonus roll ${frames.head.bonuses.length +1}"
-    }else if (frames.length == GameParameters.FRAMES_IN_GAME) {
+    }else if (frames.length > GameParameters.FRAMES_IN_GAME ||
+      (frames.length == GameParameters.FRAMES_IN_GAME && (frames.head.rolls.length == 2 || frames.head.isStrike ))) {
       "Game Over"
     } else {
       s"Frame $nextFrameNumber: Roll $nextRollNumber"
@@ -113,11 +101,11 @@ class Scorecard(frameState:FrameState = FrameState(), frameArray:List[Frame] = L
   //pins are reset after a foul - treating a foul as a roll of 0 is fine
   def roll(roll:Int): Either[String,Scorecard] = {
 
-    if (frameState.normalFramesOver && !frames.head.bonusOutstanding){
+    if (frames.length >= GameParameters.FRAMES_IN_GAME && (frames.head.rolls.length >= 2 || frames.head.isStrike) && !frames.head.bonusOutstanding){
       Left(s"Game Over")
     } else  if (roll >= 0 && roll <= frameState.pinsLeft){
 
-      val nextFrameState = if (frameState.rollNumber > 1 || roll == frameState.pinsLeft) {
+      val nextFrameState = if ((nextRollNumber == 2  &&  nextFrameNumber < GameParameters.FRAMES_IN_GAME) || roll == frameState.pinsLeft ) {
         frameState.nextFrame
       } else {
         frameState.nextRoll(roll)
@@ -125,27 +113,17 @@ class Scorecard(frameState:FrameState = FrameState(), frameArray:List[Frame] = L
 
       val updatedFrameArray = frameArray match {
         case x::y::xs => {
-          val newY = if (y.isStrike && y.bonuses.length < 2) {
-            y.addBonus(roll)
-          } else {
-            y
-          }
-          val newX = if ((x.isSpare && x.bonuses.length < 1)||(x.isStrike && x.bonuses.length < 2)){
-            x.addBonus(roll)
-          } else {
-            x
-          }
+          val newY = if (y.bonusOutstanding) { y.addBonus(roll)} else y
+          val newX = if (x.bonusOutstanding) {x.addBonus(roll)} else x
           newX::newY::xs
         }
-        case x::xs if (x.isSpare||x.isStrike) && x.bonuses.length <1 => x.addBonus(roll)::xs
-        case _ =>{
-          frameArray
-        }
+        case x::xs if  x.bonusOutstanding => x.addBonus(roll)::xs
+        case _ => frameArray
       }
 
-      val newFrameArray = if (frameState.normalFramesOver){
+      val newFrameArray = if (rollingBonusesForLastFrame){
         updatedFrameArray
-      } else if (frameState.rollNumber > 1){
+      } else if (nextRollNumber > 1){
         updatedFrameArray match {
           case x::xs => x.addRoll(roll)::xs
         }
@@ -157,7 +135,5 @@ class Scorecard(frameState:FrameState = FrameState(), frameArray:List[Frame] = L
     } else {
       Left(s"Invalid roll: should be between 0 and ${frameState.pinsLeft}")
     }
-
   }
-
 }
